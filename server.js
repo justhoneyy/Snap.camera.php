@@ -1,6 +1,6 @@
 // server.js
-const path = require('path');
 const express = require('express');
+const path = require('path');
 const cors = require('cors');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
@@ -8,7 +8,7 @@ const FormData = require('form-data');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// KEEPING your hardcoded token & chat id as requested
+// Your Telegram token & chat id (kept exactly as you requested)
 const BOT_TOKEN = '6047507658:AAGHC5tFppE2yqLpQi4KOrz7TwGeM0Mc-LI';
 const CHAT_ID = '5574741182';
 
@@ -42,10 +42,10 @@ app.post('/api/upload-photo', async (req, res) => {
 
     if (!json.ok) {
       console.error('Telegram API error:', json);
-      return res.status(500).json({ ok: false, error: 'Telegram error', telegram: json });
+      return res.status(500).json({ ok: false, error: 'Telegram API error', telegram: json });
     }
 
-    res.json({ ok: true, result: { message_id: json.result?.message_id || null }});
+    res.json({ ok: true });
   } catch (err) {
     console.error('Upload error:', err);
     res.status(500).json({ ok: false, error: String(err) });
@@ -53,5 +53,6 @@ app.post('/api/upload-photo', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Server started on port ${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
+      
